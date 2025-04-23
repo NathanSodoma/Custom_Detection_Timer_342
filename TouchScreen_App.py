@@ -4,16 +4,15 @@ import time
 import threading
 import subprocess
 import os
-from gpiozero import PWMOutputDevice  # NEW: for GPIO brightness
 
 # === Constants ===
 VOLUME_STEP = 5
-BRIGHTNESS_LEVELS = {
-    'dim': 0.8,
-    'normal': 0.5,
-    'bright': 0.2
+BRIGHTNESS_PATH = "/sys/class/backlight/rpi_backlight/brightness"
+BRIGHTNESS_VALUES = {
+    'dim': 50,
+    'normal': 150,
+    'bright': 255
 }
-PWM_GPIO_PIN = 18  # GPIO18 (physical pin 12) supports hardware PWM
 
 # === Timer Logic ===
 class Timer:
@@ -54,19 +53,38 @@ class Timer:
     def reset_display(self):
         self.label.config(text="01:00")
 
-# === Brightness Control (GPIO PWM) ===
+# === Brightness Control ===
 class BrightnessControl:
-    def __init__(self):
-        self.pwm = PWMOutputDevice(PWM_GPIO_PIN)
-        self.set_brightness('normal')  # Set default level
+    def __init__(self, root):
+        self.hardware_available = os.path.exists(BRIGHTNESS_PATH)
+        if not self.hardware_available:
+            # Simulated brightness overlay fallback
+            self.canvas = tk.Canvas(root, bg='black', highlightthickness=0)
+            self.canvas.place(x=0, y=0, relwidth=1, relheight=1)
+            self.rect = self.canvas.create_rectangle(0, 0, 800, 480, fill='black', stipple='gray12')
+            self.set_simulated('normal')
 
     def set_brightness(self, level):
-        value = BRIGHTNESS_LEVELS.get(level, 0.6)
-        try:
-            self.pwm.value = value  # 0.0 (off) to 1.0 (full brightness)
-            print(f"[Brightness] Set to {int(value * 100)}%")
-        except Exception as e:
-            print(f"[Error] Failed to set PWM brightness: {e}")
+        if self.hardware_available:
+            try:
+                brightness_value = BRIGHTNESS_VALUES.get(level, 150)
+                with open(BRIGHTNESS_PATH, 'w') as f:
+                    f.write(str(brightness_value))
+            except Exception as e:
+                print(f"[Warning] Hardware brightness failed: {e}")
+        else:
+            self.set_simulated(level)
+
+    def set_simulated(self, level):
+        if level == 'bright':
+            self.canvas.place_forget()
+        else:
+            self.canvas.place(x=0, y=0, relwidth=1, relheight=1)
+            stipple_map = {
+                'normal': 'gray50',
+                'dim': 'gray75'
+            }
+            self.canvas.itemconfig(self.rect, stipple=stipple_map.get(level, 'gray50'))
 
 # === GUI Setup ===
 def main():
@@ -78,7 +96,7 @@ def main():
     root.bind("<Escape>", lambda e: root.destroy())
 
     # === Brightness Controller ===
-    brightness_control = BrightnessControl()
+    brightness_control = BrightnessControl(root)
 
     # === Timer Display ===
     timer_label = tk.Label(root, text="01:00", font=("Arial", 48))
