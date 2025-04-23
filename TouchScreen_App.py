@@ -10,7 +10,7 @@ VOLUME_STEP = 5
 BRIGHTNESS_PATH = "/sys/class/backlight/rpi_backlight/brightness"
 BRIGHTNESS_VALUES = {
     'dim': 50,
-    'normal': 150,
+    'normal': 125,
     'bright': 255
 }
 
