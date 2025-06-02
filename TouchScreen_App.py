@@ -23,7 +23,7 @@ ALERT_SOUND_PATH = "/home/nsodoma/Custom_Detection_Timer_342/440Hz_Alarm.wav"
 
 # === Timer Logic ===
 class Timer:
-    def __init__(self, label, update_buttons_state):
+    def __init__(self, label, update_buttons_state, alert_sound):
         self.label = label
         self.running = False
         self.paused = False
@@ -31,7 +31,8 @@ class Timer:
         self.thread = None
         self.lock = threading.Lock()
         self.update_buttons_state = update_buttons_state
-
+        self.alert_sound = alert_sound
+    
     def start(self, seconds):
         with self.lock:
             if self.running:
@@ -43,7 +44,7 @@ class Timer:
             self.thread = threading.Thread(target=self.run)
             self.thread.start()
 
-    def run(self):
+        def run(self):
         while self.running and self.remaining > 0:
             with self.lock:
                 if self.paused:
@@ -57,11 +58,12 @@ class Timer:
             self.label.config(text="Time's up!")
             try:
                 if not pygame.mixer.get_busy():
-                        alert_sound.play(-1)
+                    self.alert_sound.play(-1)
             except Exception as e:
                 print(f"[Warning] Could not play alert sound: {e}")
         self.running = False
         self.update_buttons_state(True)
+
 
     def stop(self):
         with self.lock:
@@ -143,7 +145,8 @@ def main():
         plus_btn.config(state=tk.NORMAL if enable else tk.DISABLED)
         minus_btn.config(state=tk.NORMAL if enable else tk.DISABLED)
 
-    timer = Timer(timer_label, update_buttons_state)
+    timer = Timer(timer_label, update_buttons_state, alert_sound)
+
 
     # === Initialize GPIO and Sound ===
     GPIO.setmode(GPIO.BCM)
