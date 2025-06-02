@@ -60,7 +60,7 @@ class Timer:
             self.label.config(text="Time's up!")
             try:
                 if self.play_obj_ref[0] is None or not self.play_obj_ref[0].is_playing():
-                    self.play_obj_ref[0] = self.wave_obj.play()
+                    start_tone_loop()
             except Exception as e:
                 print(f"[Warning] Could not play alert tone: {e}")
         self.running = False
@@ -170,6 +170,23 @@ def main():
    
 
     play_obj_ref = [None]  # Mutable container to track current playback
+
+    tone_loop_active = [False]  # Shared flag for controlling playback thread
+
+    def start_tone_loop():
+        def loop():
+            while tone_loop_active[0]:
+                play_obj_ref[0] = wave_obj.play()
+                play_obj_ref[0].wait_done()  # Wait until tone ends (e.g. 2s) before replaying
+        tone_loop_active[0] = True
+        threading.Thread(target=loop, daemon=True).start()
+    
+    def stop_tone_loop():
+        tone_loop_active[0] = False
+        if play_obj_ref[0]:
+            play_obj_ref[0].stop()
+            play_obj_ref[0] = None
+    
     timer = Timer(timer_label, update_buttons_state, wave_obj, play_obj_ref)
 
     
@@ -180,13 +197,11 @@ def main():
             if current_state != last_state:
                 if current_state == GPIO.LOW:
                     timer.pause()
-                    if play_obj_ref[0] is None or not play_obj_ref[0].is_playing():
-                        play_obj_ref[0] = wave_obj.play()
+                    start_tone_loop()
                 else:
                     timer.resume()
                     if play_obj_ref[0]:
-                        play_obj_ref[0].stop()
-                        play_obj_ref[0] = None
+                        stop_tone_loop()
                 last_state = current_state
             time.sleep(0.1)  # Debounce/polling delay
 
@@ -211,8 +226,7 @@ def main():
     def reset_timer():
         timer.stop()
         if play_obj_ref[0]:
-            play_obj_ref[0].stop()
-            play_obj_ref[0] = None
+            stop_tone_loop()
         timer_minutes.set(1)
         timer.reset_display()
         update_buttons_state(True)
