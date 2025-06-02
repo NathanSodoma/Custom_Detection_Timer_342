@@ -61,7 +61,7 @@ class Timer:
             self.label.config(text="Time's up!")
             try:
                 if self.play_obj_ref[0] is None or not self.play_obj_ref[0].is_playing():
-                    start_tone_loop()
+                    se;f.start_tone_loop()
             except Exception as e:
                 print(f"[Warning] Could not play alert tone: {e}")
         self.running = False
@@ -198,7 +198,7 @@ def main():
             if current_state != last_state:
                 if current_state == GPIO.LOW:
                     timer.pause()
-                    self.start_tone_loop()
+                    start_tone_loop()
                 else:
                     timer.resume()
                     if play_obj_ref[0]:
