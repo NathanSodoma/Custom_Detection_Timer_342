@@ -121,8 +121,10 @@ def main():
     root.geometry("800x480")
     root.attributes('-fullscreen', True)
     root.bind("<Escape>", lambda e: root.destroy())
+    
+    subprocess.run(["amixer", "cset", "numid=3", "1"])
+    subprocess.run(["amixer", "sset", "Master", "50%"])  # Set volume to 50%
 
-    subprocess.run(["amixer", "sset", "Master", "50%"])
 
     # === Brightness Controller ===
     brightness_control = BrightnessControl(root)
