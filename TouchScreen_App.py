@@ -146,7 +146,7 @@ def main():
         plus_btn.config(state=tk.NORMAL if enable else tk.DISABLED)
         minus_btn.config(state=tk.NORMAL if enable else tk.DISABLED)
 
-    timer = Timer(timer_label, update_buttons_state, alert_sound)
+    
 
 
     # === Initialize GPIO and Sound ===
@@ -156,6 +156,8 @@ def main():
     pygame.mixer.init()
     alert_sound = pygame.mixer.Sound(ALERT_SOUND_PATH)
 
+    timer = Timer(timer_label, update_buttons_state, alert_sound)
+    
     def monitor_sensor():
         last_state = GPIO.input(SENSOR_PIN)
         while True:
@@ -193,6 +195,7 @@ def main():
 
     def reset_timer():
         timer.stop()
+        alert_sound.stop()
         timer_minutes.set(1)
         timer.reset_display()
         update_buttons_state(True)
