@@ -4,6 +4,9 @@ import time
 import threading
 import subprocess
 import os
+import RPi.GPIO as GPIO
+import pygame
+
 
 # === Constants ===
 VOLUME_STEP = 5
@@ -13,12 +16,17 @@ BRIGHTNESS_VALUES = {
     'normal': 125,
     'bright': 255
 }
+# === GPIO and Sound Setup ===
+SENSOR_PIN = 17
+ALERT_SOUND_PATH = "/home/nsodoma/Custom_Detection_Timer_342/440Hz_Alarm.wav" 
+
 
 # === Timer Logic ===
 class Timer:
     def __init__(self, label, update_buttons_state):
         self.label = label
         self.running = False
+        self.paused = False
         self.remaining = 0
         self.thread = None
         self.lock = threading.Lock()
@@ -30,18 +38,28 @@ class Timer:
                 return
             self.remaining = seconds
             self.running = True
+            self.paused = False
             self.update_buttons_state(False)
             self.thread = threading.Thread(target=self.run)
             self.thread.start()
 
     def run(self):
         while self.running and self.remaining > 0:
-            mins, secs = divmod(self.remaining, 60)
-            self.label.config(text=f"{mins:02d}:{secs:02d}")
+            with self.lock:
+                if self.paused:
+                    time.sleep(0.1)
+                    continue
+                mins, secs = divmod(self.remaining, 60)
+                self.label.config(text=f"{mins:02d}:{secs:02d}")
+                self.remaining -= 1
             time.sleep(1)
-            self.remaining -= 1
         if self.remaining == 0 and self.running:
             self.label.config(text="Time's up!")
+            try:
+                if not pygame.mixer.get_busy():
+                        alert_sound.play(-1)
+            except Exception as e:
+                print(f"[Warning] Could not play alert sound: {e}")
         self.running = False
         self.update_buttons_state(True)
 
@@ -52,6 +70,14 @@ class Timer:
 
     def reset_display(self):
         self.label.config(text="01:00")
+
+    def pause(self):
+        with self.lock:
+            self.paused = True
+
+    def resume(self):
+        with self.lock:
+            self.paused = False
 
 # === Brightness Control ===
 class BrightnessControl:
@@ -88,12 +114,15 @@ class BrightnessControl:
 
 # === GUI Setup ===
 def main():
+    
     root = tk.Tk()
     root.config(cursor="none")
     root.title("Raspberry Pi Touch Controller")
     root.geometry("800x480")
     root.attributes('-fullscreen', True)
     root.bind("<Escape>", lambda e: root.destroy())
+
+    subprocess.run(["amixer", "sset", "Master", "50%"])
 
     # === Brightness Controller ===
     brightness_control = BrightnessControl(root)
@@ -103,7 +132,7 @@ def main():
     timer_label.pack(pady=15)
 
     timer_minutes = tk.IntVar(value=1)
-
+    
     def update_timer_label():
         mins = timer_minutes.get()
         timer_label.config(text=f"{mins:02d}:00")
@@ -114,6 +143,35 @@ def main():
 
     timer = Timer(timer_label, update_buttons_state)
 
+    # === Initialize GPIO and Sound ===
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(SENSOR_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+    pygame.mixer.init()
+    alert_sound = pygame.mixer.Sound(ALERT_SOUND_PATH)
+
+    def monitor_sensor():
+        last_state = GPIO.input(SENSOR_PIN)
+        while True:
+            current_state = GPIO.input(SENSOR_PIN)
+            if current_state != last_state:
+                if current_state == GPIO.LOW:
+                    # Object removed: pause timer and play alert
+                    timer.pause()
+                    if not pygame.mixer.get_busy():
+                        alert_sound.play(-1)
+                else:
+                    # Object returned: resume timer and stop alert
+                    timer.resume()
+                    alert_sound.stop()
+                last_state = current_state
+            time.sleep(0.1)  # Debounce/polling delay
+
+    sensor_thread = threading.Thread(target=monitor_sensor, daemon=True)
+    sensor_thread.start()
+
+
+    
     def increase_time():
         timer_minutes.set(timer_minutes.get() + 1)
         update_timer_label()
