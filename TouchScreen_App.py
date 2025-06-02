@@ -44,7 +44,7 @@ class Timer:
             self.thread = threading.Thread(target=self.run)
             self.thread.start()
 
-        def run(self):
+    def run(self):
         while self.running and self.remaining > 0:
             with self.lock:
                 if self.paused:
@@ -63,6 +63,7 @@ class Timer:
                 print(f"[Warning] Could not play alert sound: {e}")
         self.running = False
         self.update_buttons_state(True)
+
 
 
     def stop(self):
