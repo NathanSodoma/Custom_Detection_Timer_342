@@ -5,7 +5,8 @@ import threading
 import subprocess
 import os
 import RPi.GPIO as GPIO
-import pygame
+import numpy as np
+import simpleaudio as sa
 
 
 # === Constants ===
@@ -23,7 +24,7 @@ ALERT_SOUND_PATH = "/home/nsodoma/Custom_Detection_Timer_342/440Hz_Alarm.wav"
 
 # === Timer Logic ===
 class Timer:
-    def __init__(self, label, update_buttons_state, alert_sound):
+    def __init__(self, label, update_buttons_state, wave_obj, play_obj_ref):
         self.label = label
         self.running = False
         self.paused = False
@@ -31,7 +32,8 @@ class Timer:
         self.thread = None
         self.lock = threading.Lock()
         self.update_buttons_state = update_buttons_state
-        self.alert_sound = alert_sound
+        self.wave_obj = wave_obj
+        self.play_obj_ref = play_obj_ref
     
     def start(self, seconds):
         with self.lock:
@@ -57,10 +59,10 @@ class Timer:
         if self.remaining == 0 and self.running:
             self.label.config(text="Time's up!")
             try:
-                if not pygame.mixer.get_busy():
-                    self.alert_sound.play(-1)
+                if self.play_obj_ref[0] is None or not self.play_obj_ref[0].is_playing():
+                    self.play_obj_ref[0] = self.wave_obj.play()
             except Exception as e:
-                print(f"[Warning] Could not play alert sound: {e}")
+                print(f"[Warning] Could not play alert tone: {e}")
         self.running = False
         self.update_buttons_state(True)
 
@@ -136,6 +138,18 @@ def main():
     timer_label = tk.Label(root, text="01:00", font=("Arial", 48))
     timer_label.pack(pady=15)
 
+    # === Generate 440 Hz Tone ===
+    def generate_tone(freq=440, duration=2.0, sample_rate=44100, amplitude=0.5):
+        t = np.linspace(0, duration, int(sample_rate * duration), False)
+        tone = np.sin(freq * 2 * np.pi * t)
+        audio = (tone * (2**15 - 1) * amplitude).astype(np.int16)
+        return audio
+    
+    tone_buffer = generate_tone()
+    wave_obj = sa.WaveObject(tone_buffer, 1, 2, 44100)
+    play_obj = None
+
+    
     timer_minutes = tk.IntVar(value=1)
     
     def update_timer_label():
@@ -153,10 +167,11 @@ def main():
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(SENSOR_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-    pygame.mixer.init()
-    alert_sound = pygame.mixer.Sound(ALERT_SOUND_PATH)
+   
 
-    timer = Timer(timer_label, update_buttons_state, alert_sound)
+    play_obj_ref = [None]  # Mutable container to track current playback
+    timer = Timer(timer_label, update_buttons_state, wave_obj, play_obj_ref)
+
     
     def monitor_sensor():
         last_state = GPIO.input(SENSOR_PIN)
@@ -164,14 +179,14 @@ def main():
             current_state = GPIO.input(SENSOR_PIN)
             if current_state != last_state:
                 if current_state == GPIO.LOW:
-                    # Object removed: pause timer and play alert
                     timer.pause()
-                    if not pygame.mixer.get_busy():
-                        alert_sound.play(-1)
+                    if play_obj_ref[0] is None or not play_obj_ref[0].is_playing():
+                        play_obj_ref[0] = wave_obj.play()
                 else:
-                    # Object returned: resume timer and stop alert
                     timer.resume()
-                    alert_sound.stop()
+                    if play_obj_ref[0]:
+                        play_obj_ref[0].stop()
+                        play_obj_ref[0] = None
                 last_state = current_state
             time.sleep(0.1)  # Debounce/polling delay
 
@@ -195,7 +210,9 @@ def main():
 
     def reset_timer():
         timer.stop()
-        alert_sound.stop()
+        if play_obj_ref[0]:
+            play_obj_ref[0].stop()
+            play_obj_ref[0] = None
         timer_minutes.set(1)
         timer.reset_display()
         update_buttons_state(True)
