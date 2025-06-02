@@ -24,7 +24,7 @@ SENSOR_PIN = 17
 
 # === Timer Logic ===
 class Timer:
-    def __init__(self, label, update_buttons_state, wave_obj, play_obj_ref):
+    def __init__(self, label, update_buttons_state, wave_obj, play_obj_ref, start_tone_loop):
         self.label = label
         self.running = False
         self.paused = False
@@ -34,6 +34,7 @@ class Timer:
         self.update_buttons_state = update_buttons_state
         self.wave_obj = wave_obj
         self.play_obj_ref = play_obj_ref
+        self.start_tone_loop = start_tone_loop
     
     def start(self, seconds):
         with self.lock:
@@ -187,7 +188,7 @@ def main():
             play_obj_ref[0].stop()
             play_obj_ref[0] = None
     
-    timer = Timer(timer_label, update_buttons_state, wave_obj, play_obj_ref)
+    timer = Timer(timer_label, update_buttons_state, wave_obj, play_obj_ref, start_tone_loop)
 
     
     def monitor_sensor():
@@ -197,7 +198,7 @@ def main():
             if current_state != last_state:
                 if current_state == GPIO.LOW:
                     timer.pause()
-                    start_tone_loop()
+                    self.start_tone_loop()
                 else:
                     timer.resume()
                     if play_obj_ref[0]:
