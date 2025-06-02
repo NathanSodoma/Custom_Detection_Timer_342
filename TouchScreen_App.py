@@ -19,7 +19,7 @@ BRIGHTNESS_VALUES = {
 }
 # === GPIO and Sound Setup ===
 SENSOR_PIN = 17
-ALERT_SOUND_PATH = "/home/nsodoma/Custom_Detection_Timer_342/440Hz_Alarm.wav" 
+
 
 
 # === Timer Logic ===
@@ -145,7 +145,7 @@ def main():
         audio = (tone * (2**15 - 1) * amplitude).astype(np.int16)
         return audio
     
-    tone_buffer = generate_tone()
+    tone_buffer = generate_tone(duration=10.0)
     wave_obj = sa.WaveObject(tone_buffer, 1, 2, 44100)
     play_obj = None
 
