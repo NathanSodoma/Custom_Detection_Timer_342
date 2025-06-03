@@ -133,6 +133,9 @@ def main():
     subprocess.run(["amixer", "cset", "numid=3", "1"])
     subprocess.run(["amixer", "sset", "Master", "50%"])  # Set volume to 50%
 
+    tone_thread = [None]
+    GPIO.add_event_detect(SENSOR_PIN, GPIO.BOTH, callback=gpio_callback, bouncetime=150)
+
 
     # === Brightness Controller ===
     brightness_control = BrightnessControl(root)
@@ -177,43 +180,47 @@ def main():
     tone_loop_active = [False]  # Shared flag for controlling playback thread
 
     def start_tone_loop():
+        if tone_loop_active[0]:
+            return  # already running
+
+        tone_loop_active[0] = True
+
         def loop():
             while tone_loop_active[0]:
                 play_obj_ref[0] = wave_obj.play()
-                play_obj_ref[0].wait_done()  # Wait until tone ends (e.g. 2s) before replaying
-        tone_loop_active[0] = True
-        threading.Thread(target=loop, daemon=True).start()
+                while play_obj_ref[0].is_playing():
+                    if not tone_loop_active[0]:
+                        play_obj_ref[0].stop()
+                        break
+                    time.sleep(0.05)
+
+        tone_thread[0] = threading.Thread(target=loop, daemon=True)
+        tone_thread[0].start()
     
     def stop_tone_loop():
         tone_loop_active[0] = False
         if play_obj_ref[0]:
             play_obj_ref[0].stop()
             play_obj_ref[0] = None
+        if tone_thread[0] and tone_thread[0].is_alive():
+            tone_thread[0].join(timeout=0.5)  # Ensure thread exits quickly
+            tone_thread[0] = None
     
     timer = Timer(timer_label, update_buttons_state, wave_obj, play_obj_ref, start_tone_loop)
 
     
-    def monitor_sensor():
-        last_state = GPIO.input(SENSOR_PIN)
-        while True:
-            current_state = GPIO.input(SENSOR_PIN)
-            if current_state != last_state:
-                stable_state_counter += 1
-                if stable_state_counter >= 3:  # Require 3 consistent reads
-                    if current_state == GPIO.LOW and timer.running:
-                        timer.pause()
-                        start_tone_loop()
-                    elif current_state == GPIO.HIGH:
-                        timer.resume()
-                        stop_tone_loop()
-                    last_state = current_state
-                    stable_state_counter = 0
-            else:
-                stable_state_counter = 0
-            time.sleep(0.1)  # Debounce/polling delay
+    def gpio_callback(channel):
+        current_state = GPIO.input(SENSOR_PIN)
+        if current_state == GPIO.LOW and timer.running:
+            print("[GPIO] Object removed - pausing timer and playing tone")
+            timer.pause()
+            start_tone_loop()
+        elif current_state == GPIO.HIGH:
+            print("[GPIO] Object returned - resuming timer and stopping tone")
+            timer.resume()
+            stop_tone_loop()
 
-    sensor_thread = threading.Thread(target=monitor_sensor, daemon=True)
-    sensor_thread.start()
+    
 
 
     
