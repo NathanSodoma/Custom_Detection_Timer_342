@@ -198,14 +198,18 @@ def main():
         while True:
             current_state = GPIO.input(SENSOR_PIN)
             if current_state != last_state:
-                if current_state == GPIO.LOW and timer.running:
-                    timer.pause()
-                    start_tone_loop()
-                else:
-                    timer.resume()
-                    if play_obj_ref[0]:
+                stable_state_counter += 1
+                if stable_state_counter >= 3:  # Require 3 consistent reads
+                    if current_state == GPIO.LOW and timer.running:
+                        timer.pause()
+                        start_tone_loop()
+                    elif current_state == GPIO.HIGH:
+                        timer.resume()
                         stop_tone_loop()
-                last_state = current_state
+                    last_state = current_state
+                    stable_state_counter = 0
+            else:
+                stable_state_counter = 0
             time.sleep(0.1)  # Debounce/polling delay
 
     sensor_thread = threading.Thread(target=monitor_sensor, daemon=True)
