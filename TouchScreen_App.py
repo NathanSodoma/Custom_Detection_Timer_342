@@ -61,7 +61,7 @@ class Timer:
             self.label.config(text="Time's up!")
             try:
                 if self.play_obj_ref[0] is None or not self.play_obj_ref[0].is_playing():
-                    se;f.start_tone_loop()
+                    self.start_tone_loop()
             except Exception as e:
                 print(f"[Warning] Could not play alert tone: {e}")
         self.running = False
