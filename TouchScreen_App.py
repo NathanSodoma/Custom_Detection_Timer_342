@@ -64,6 +64,8 @@ class Timer:
                     self.start_tone_loop()
             except Exception as e:
                 print(f"[Warning] Could not play alert tone: {e}")
+            self.update_buttons_state(False)
+            
         self.running = False
         self.update_buttons_state(True)
 
@@ -196,7 +198,7 @@ def main():
         while True:
             current_state = GPIO.input(SENSOR_PIN)
             if current_state != last_state:
-                if current_state == GPIO.LOW:
+                if current_state == GPIO.LOW and timer.running:
                     timer.pause()
                     start_tone_loop()
                 else:
