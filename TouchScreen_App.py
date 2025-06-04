@@ -134,7 +134,7 @@ def main():
     subprocess.run(["amixer", "sset", "Master", "50%"])  # Set volume to 50%
 
     tone_thread = [None]
-    GPIO.add_event_detect(SENSOR_PIN, GPIO.BOTH, callback=gpio_callback, bouncetime=150)
+    
 
 
     # === Brightness Controller ===
@@ -171,7 +171,7 @@ def main():
 
     # === Initialize GPIO and Sound ===
     GPIO.setmode(GPIO.BCM)
-    GPIO.setup(SENSOR_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    
 
    
 
@@ -219,7 +219,9 @@ def main():
             print("[GPIO] Object returned - resuming timer and stopping tone")
             timer.resume()
             stop_tone_loop()
-
+            
+    GPIO.setup(SENSOR_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+    GPIO.add_event_detect(SENSOR_PIN, GPIO.BOTH, callback=gpio_callback, bouncetime=150)
     
 
 
