@@ -164,10 +164,9 @@ def main():
 
     tone_process = [None]
 
-     def stop_tone_loop():
-        if tone_process[0] is not None:
-            tone_process[0].terminate()
-            tone_process[0] = None
+    def start_tone_loop():
+        if tone_process[0] is None or tone_process[0].poll() is not None:
+            tone_process[0] = subprocess.Popen(["aplay", "/home/nsodoma/Custom_Detection_Timer_342/440Hz.wav"])
     
     def stop_tone_loop():
         if tone_process[0] is not None:
