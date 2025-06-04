@@ -24,7 +24,7 @@ SENSOR_PIN = 17
 
 # === Timer Logic ===
 class Timer:
-    def __init__(self, label, update_buttons_state, wave_obj, play_obj_ref, start_tone_loop):
+    def __init__(self, label, update_buttons_state, start_tone_loop):
         self.label = label
         self.running = False
         self.paused = False
@@ -32,8 +32,6 @@ class Timer:
         self.thread = None
         self.lock = threading.Lock()
         self.update_buttons_state = update_buttons_state
-        self.wave_obj = wave_obj
-        self.play_obj_ref = play_obj_ref
         self.start_tone_loop = start_tone_loop
     
     def start(self, seconds):
@@ -59,11 +57,7 @@ class Timer:
             time.sleep(1)
         if self.remaining == 0 and self.running:
             self.label.config(text="Time's up!")
-            try:
-                if self.play_obj_ref[0] is None or not self.play_obj_ref[0].is_playing():
-                    self.start_tone_loop()
-            except Exception as e:
-                print(f"[Warning] Could not play alert tone: {e}")
+            self.start_tone_loop()
             self.update_buttons_state(False)
             
         self.running = False
@@ -144,16 +138,7 @@ def main():
     timer_label = tk.Label(root, text="01:00", font=("Arial", 48))
     timer_label.pack(pady=15)
 
-    # === Generate 440 Hz Tone ===
-    def generate_tone(freq=440, duration=2.0, sample_rate=44100, amplitude=0.5):
-        t = np.linspace(0, duration, int(sample_rate * duration), False)
-        tone = np.sin(freq * 2 * np.pi * t)
-        audio = (tone * (2**15 - 1) * amplitude).astype(np.int16)
-        return audio
     
-    tone_buffer = generate_tone(duration=10.0)
-    wave_obj = sa.WaveObject(tone_buffer, 1, 2, 44100)
-    play_obj = None
 
     
     timer_minutes = tk.IntVar(value=1)
@@ -175,38 +160,21 @@ def main():
 
    
 
-    play_obj_ref = [None]  # Mutable container to track current playback
+    
 
-    tone_loop_active = [False]  # Shared flag for controlling playback thread
+    tone_process = [None]
 
-    def start_tone_loop():
-        if tone_loop_active[0]:
-            return  # already running
-
-        tone_loop_active[0] = True
-
-        def loop():
-            while tone_loop_active[0]:
-                play_obj_ref[0] = wave_obj.play()
-                while play_obj_ref[0].is_playing():
-                    if not tone_loop_active[0]:
-                        play_obj_ref[0].stop()
-                        break
-                    time.sleep(0.05)
-
-        tone_thread[0] = threading.Thread(target=loop, daemon=True)
-        tone_thread[0].start()
+     def stop_tone_loop():
+        if tone_process[0] is not None:
+            tone_process[0].terminate()
+            tone_process[0] = None
     
     def stop_tone_loop():
-        tone_loop_active[0] = False
-        if play_obj_ref[0]:
-            play_obj_ref[0].stop()
-            play_obj_ref[0] = None
-        if tone_thread[0] and tone_thread[0].is_alive():
-            tone_thread[0].join(timeout=0.5)  # Ensure thread exits quickly
-            tone_thread[0] = None
+        if tone_process[0] is not None:
+            tone_process[0].terminate()
+            tone_process[0] = None
     
-    timer = Timer(timer_label, update_buttons_state, wave_obj, play_obj_ref, start_tone_loop)
+    timer = Timer(timer_label, update_buttons_state, start_tone_loop)
 
     
     def gpio_callback(channel):
@@ -241,8 +209,7 @@ def main():
 
     def reset_timer():
         timer.stop()
-        if play_obj_ref[0]:
-            stop_tone_loop()
+        stop_tone_loop()
         timer_minutes.set(1)
         timer.reset_display()
         update_buttons_state(True)
