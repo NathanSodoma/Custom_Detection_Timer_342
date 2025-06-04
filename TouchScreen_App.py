@@ -7,6 +7,7 @@ import os
 import RPi.GPIO as GPIO
 import numpy as np
 import simpleaudio as sa
+import shlex
 
 
 # === Constants ===
@@ -142,6 +143,12 @@ def main():
 
     
     timer_minutes = tk.IntVar(value=1)
+
+    def enforce_timer_and_audio_consistency():
+        # If object is present but tone is still playing, stop it
+        if GPIO.input(SENSOR_PIN) == GPIO.HIGH and timer.running:
+            stop_tone_loop()
+
     
     def update_timer_label():
         mins = timer_minutes.get()
@@ -166,18 +173,35 @@ def main():
 
     def start_tone_loop():
         if tone_process[0] is None or tone_process[0].poll() is not None:
-            tone_process[0] = subprocess.Popen(["aplay", "/home/nsodoma/Custom_Detection_Timer_342/440Hz.wav"])
+            # Loop using aplay restart in a subprocess that repeats
+            loop_command = 'while true; do aplay /home/nsodoma/Custom_Detection_Timer_342/440Hz.wav; done'
+            tone_process[0] = subprocess.Popen(
+                ["bash", "-c", loop_command],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL
+            )
     
     def stop_tone_loop():
-        if tone_process[0] is not None:
-            tone_process[0].terminate()
-            tone_process[0] = None
+        try:
+            subprocess.run(["pkill", "-f", "aplay"], check=False)
+        except Exception as e:
+            print(f"[Tone] Error stopping tone: {e}")
     
     timer = Timer(timer_label, update_buttons_state, start_tone_loop)
-
+    last_gpio_state = [None]
+    last_gpio_change_time = [0]
     
     def gpio_callback(channel):
         current_state = GPIO.input(SENSOR_PIN)
+        current_time = time.time()
+    
+        # Ignore if same state or if changed too recently
+        if current_state == last_gpio_state[0] and (current_time - last_gpio_change_time[0]) < 0.5:
+            return
+    
+        last_gpio_state[0] = current_state
+        last_gpio_change_time[0] = current_time
+    
         if current_state == GPIO.LOW and timer.running:
             print("[GPIO] Object removed - pausing timer and playing tone")
             timer.pause()
@@ -186,7 +210,8 @@ def main():
             print("[GPIO] Object returned - resuming timer and stopping tone")
             timer.resume()
             stop_tone_loop()
-            
+
+    threading.Timer(1.0, enforce_timer_and_audio_consistency).start()
     GPIO.setup(SENSOR_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
     GPIO.add_event_detect(SENSOR_PIN, GPIO.BOTH, callback=gpio_callback, bouncetime=150)
     
